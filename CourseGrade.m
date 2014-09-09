@@ -1,0 +1,102 @@
+function []=CourseGrade()
+clear all;
+close all;
+load grades.csv;
+X=grades;
+X=X';
+%X=mxn data set; m categories: homework, quiz, midterm, final; n students
+[m,n]=size(X);
+meanx=mean(X,2);
+X=X-repmat(meanx, 1, n); % subtract off the mean for each dimension
+X=X/sqrt(n);
+
+[V,D,U] = svd(X);
+v = V(:,1);
+pcawt = 100*(v.*v)/sum(v.*v);
+firstvariance = 100*(D(1,1)*D(1,1))/trace(D*transpose(D));
+
+disp(['The first principal component contributes ', ...
+num2str(firstvariance, 3), '% of the variation.']);
+disp([sprintf('The weights of homework, quiz, midterm, and final \n'),...
+sprintf('according to the first principal component are respectively \n'), ...
+num2str(pcawt(1),2), '%, ', num2str(pcawt(2),3), '%, ',...
+num2str(pcawt(3),3), '%, ', num2str(pcawt(4),3), '%.']);
+sylwt=[15; 20; 25; 40]; % syllabus weight
+disp([sprintf('The weights of homework, quiz, midterm, and final \n'),...
+sprintf('according to the syllabus are respectively \n'), ...
+num2str(sylwt(1)), '%, ', num2str(sylwt(2)), '%, ',...
+num2str(sylwt(3)), '%, ', num2str(sylwt(4)), '%.']);
+
+
+% composite grades based on syllabus wt and PCA weight
+for i=1:n
+grades(i,m+1)=grades(i,1:m)*sylwt;
+grades(i,m+2)=grades(i,1:m)*pcawt;
+end
+% Generate a new grade roster indexed by numbers 1 through n
+for i=1:n
+for j=1:m+2
+indgrades(i,m+4-j)=grades(i, m+3-j);
+end
+indgrades(i, 1)=i;
+end
+% Sort the grade roster by syllabus and PCA weights respectively
+% and assign letter grades
+[sorted_sylwt, sorted_sylwt_ind]=sortrows(indgrades, -5);
+[sorted_pcawt, sorted_pcawt_ind]=sortrows(indgrades, -6);
+for i=1:15
+indgrades(sorted_sylwt_ind(i),8)='A';
+indgrades(sorted_pcawt_ind(i),9)='A';
+end
+for i=16:35
+indgrades(sorted_sylwt_ind(i),8)='B';
+indgrades(sorted_pcawt_ind(i),9)='B';
+end
+for i=36:39
+indgrades(sorted_sylwt_ind(i),8)='C';
+indgrades(sorted_pcawt_ind(i),9)='C';
+end
+for i=40:n
+indgrades(sorted_sylwt_ind(i),8)='D';
+indgrades(sorted_pcawt_ind(i),9)='D';
+end
+for i=1:n
+if indgrades(i,8)~=indgrades(i,9)
+disp(['Student number ', num2str(i), ...
+sprintf('\n'),'has respective syllabus and PCA grades ',...
+char(indgrades(i,8)), ' and ', char(indgrades(i,9))]);
+end
+end
+csvwrite('indgrades.csv', indgrades);
+
+newx=[94; 75; 0; 59];
+grades(n+1,[1:m])=newx;
+newx=(newx-meanx)/sqrt(n);
+
+% Get RSVD
+[V, D, U] = svd(X);
+
+Vk = V(:,1:2);
+Uk = U(:,1:2);
+Dk = D(:,1:2);
+Dk = Dk(1:2,:);
+
+% u = inv(Dk) * transpose(Vk) * newx;
+u = transpose(newx) * Vk * inv(Dk);
+bestind = 0;
+mostSimilar = 0;
+for i = 1:size(Uk, 1)
+    temp = abs(dot(u, Uk(i, :)) / (norm(u) * norm(Uk(i, :))));
+    if (temp > mostSimilar)
+        bestind = i;
+        mostSimilar = temp;
+    end    
+end
+
+disp(['The best match for the student is student number ', num2str(bestind), ...
+sprintf('\n'),'whose midterm score is ', num2str(grades(bestind,3))]);
+grades(n+1,3)=grades(bestind,3);
+grades(n+1,m+1)=grades(n+1,1:m)*sylwt/100;
+grades(n+1,m+2)=grades(n+1,1:m)*pcawt/100;
+csvwrite('newgrades.csv',grades)
+
